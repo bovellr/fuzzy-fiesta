@@ -1,0 +1,771 @@
+/*
+Power BI / Tabular Editor implementation script: proposed refactored DAX measures and calculation groups
+Model: sm_finance_core
+Source package reviewed: Finance_WS_Semantic_Models.zip
+
+Purpose
+- Provides a complete proposed reusable DAX layer aligned to the semantic-model review.
+- Preserves existing model behavior by introducing new vNext measures/calculation groups instead of deleting existing measures.
+- Column references are based on static TMDL inspection of the submitted PBIP package.
+
+Implementation rule
+- Create these as new measures/calculation items first.
+- Compare each vNext measure against the current measure it is intended to replace before hiding/deprecating the current measure.
+- Do not delete current measures until report, Excel, and downstream semantic-model usage has been checked.
+*/
+
+------------------------------------------------------------
+-- 00 BASE MEASURES - GL, budgets, forecasts, balances
+------------------------------------------------------------
+
+MEASURE '_Measures'[vNext Actual GBP Base] =
+    SUM ( fact_gl_balances[ActualGBP] )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "00 vNext Base Measures\GL"
+    DESCRIPTION = "Business: actual finance value in GBP at the balance/fiscal-period grain. Technical: additive base over fact_gl_balances[ActualGBP]. Inferred pending finance-owner confirmation."
+
+MEASURE '_Measures'[vNext Budget GBP Base] =
+    SUM ( fact_gl_balances[BudgetGBP] )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "00 vNext Base Measures\GL"
+    DESCRIPTION = "Business: budget finance value in GBP at the balance/fiscal-period grain. Technical: additive base over fact_gl_balances[BudgetGBP]. Inferred pending finance-owner confirmation."
+
+MEASURE '_Measures'[vNext Forecast GBP Base] =
+    SUM ( fact_gl_forecasts[ForecastGBP] )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "00 vNext Base Measures\GL"
+    DESCRIPTION = "Business: forecast finance value in GBP. Technical: additive base over fact_gl_forecasts[ForecastGBP]; use forecast-version filters where required. Inferred pending finance-owner confirmation."
+
+MEASURE '_Measures'[vNext GL Transaction Signed GBP Base] =
+    SUM ( fact_gl_transactions[SignedAmount] )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "00 vNext Base Measures\GL"
+    DESCRIPTION = "Business: signed general-ledger transaction value. Technical: additive base over fact_gl_transactions[SignedAmount]. Use for transaction-grain movement analysis. Inferred pending finance-owner confirmation."
+
+MEASURE '_Measures'[vNext Actual WTC Base] =
+    SUM ( fact_gl_balances[ActualWTC] )
+    FORMAT_STRING = "#,0.0;(#,0.0);-"
+    DISPLAY_FOLDER = "00 vNext Base Measures\Workforce"
+    DESCRIPTION = "Business: actual worked-time count / WTC measure. Technical: additive base over fact_gl_balances[ActualWTC]. Confirm workforce definition."
+
+MEASURE '_Measures'[vNext Budget WTC Base] =
+    SUM ( fact_gl_balances[BudgetWTC] )
+    FORMAT_STRING = "#,0.0;(#,0.0);-"
+    DISPLAY_FOLDER = "00 vNext Base Measures\Workforce"
+    DESCRIPTION = "Business: budget worked-time count / WTC measure. Technical: additive base over fact_gl_balances[BudgetWTC]. Confirm workforce definition."
+
+MEASURE '_Measures'[vNext Actual WTW Base] =
+    SUM ( fact_gl_transactions[Wtw] )
+    FORMAT_STRING = "#,0.0;(#,0.0);-"
+    DISPLAY_FOLDER = "00 vNext Base Measures\Workforce"
+    DESCRIPTION = "Business: actual WTW value from GL transactions. Technical: additive base over fact_gl_transactions[Wtw]. Confirm workforce definition."
+
+MEASURE '_Measures'[vNext Actual WTP Base] =
+    SUM ( fact_gl_transactions[Wtp] )
+    FORMAT_STRING = "#,0.0;(#,0.0);-"
+    DISPLAY_FOLDER = "00 vNext Base Measures\Workforce"
+    DESCRIPTION = "Business: actual WTP value from GL transactions. Technical: additive base over fact_gl_transactions[Wtp]. Confirm workforce definition."
+
+MEASURE '_Measures'[vNext Actual HCT Base] =
+    SUM ( fact_gl_transactions[Hct] )
+    FORMAT_STRING = "#,0.0;(#,0.0);-"
+    DISPLAY_FOLDER = "00 vNext Base Measures\Workforce"
+    DESCRIPTION = "Business: actual headcount / HCT value from GL transactions. Technical: additive base over fact_gl_transactions[Hct]. Confirm workforce definition."
+
+------------------------------------------------------------
+-- 01 BASE MEASURES - purchasing, invoice ledger, AP validation
+------------------------------------------------------------
+
+MEASURE '_Measures'[vNext PO Net Amount Base] =
+    SUM ( fact_purchase_orders[NetAmount] )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "00 vNext Base Measures\Procurement"
+    DESCRIPTION = "Business: purchase-order net amount. Technical: additive base over fact_purchase_orders[NetAmount]. Avoid combining with line-level measures without grain controls."
+
+MEASURE '_Measures'[vNext Purchase Line Net Value Base] =
+    SUM ( fact_purchase_lines[NetValue] )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "00 vNext Base Measures\Procurement"
+    DESCRIPTION = "Business: purchase-line net value. Technical: additive base over fact_purchase_lines[NetValue]."
+
+MEASURE '_Measures'[vNext Purchase Line Invoiced Value Base] =
+    SUM ( fact_purchase_lines[InvoicedValue] )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "00 vNext Base Measures\Procurement"
+    DESCRIPTION = "Business: invoiced value for purchase lines. Technical: additive base over fact_purchase_lines[InvoicedValue]."
+
+MEASURE '_Measures'[vNext Purchase Line Received Value Base] =
+    SUM ( fact_purchase_lines[ReceivedValue] )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "00 vNext Base Measures\Procurement"
+    DESCRIPTION = "Business: received value for purchase lines. Technical: additive base over fact_purchase_lines[ReceivedValue]."
+
+MEASURE '_Measures'[vNext Purchase Line Outstanding Invoice Value Base] =
+    SUM ( fact_purchase_lines[OutstandingInvValue] )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "00 vNext Base Measures\Procurement"
+    DESCRIPTION = "Business: purchase-line value not yet invoiced. Technical: additive base over fact_purchase_lines[OutstandingInvValue]."
+
+MEASURE '_Measures'[vNext Quantity Ordered Base] =
+    SUM ( fact_purchase_lines[QtyOrdered] )
+    FORMAT_STRING = "#,0.00;(#,0.00);-"
+    DISPLAY_FOLDER = "00 vNext Base Measures\Procurement"
+    DESCRIPTION = "Business: ordered purchase-line quantity. Technical: additive base over fact_purchase_lines[QtyOrdered]."
+
+MEASURE '_Measures'[vNext Quantity Received Base] =
+    SUM ( fact_purchase_lines[QtyReceived] )
+    FORMAT_STRING = "#,0.00;(#,0.00);-"
+    DISPLAY_FOLDER = "00 vNext Base Measures\Procurement"
+    DESCRIPTION = "Business: received purchase-line quantity. Technical: additive base over fact_purchase_lines[QtyReceived]."
+
+MEASURE '_Measures'[vNext Quantity Invoiced Base] =
+    SUM ( fact_purchase_lines[QtyInvoiced] )
+    FORMAT_STRING = "#,0.00;(#,0.00);-"
+    DISPLAY_FOLDER = "00 vNext Base Measures\Procurement"
+    DESCRIPTION = "Business: invoiced purchase-line quantity. Technical: additive base over fact_purchase_lines[QtyInvoiced]."
+
+MEASURE '_Measures'[vNext Invoice Original Amount Base] =
+    SUM ( fact_invoice_ledger[OriginalAmount] )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "00 vNext Base Measures\AP Invoice Ledger"
+    DESCRIPTION = "Business: original invoice value. Technical: additive base over fact_invoice_ledger[OriginalAmount] using active InvoiceDate relationship by default."
+
+MEASURE '_Measures'[vNext Invoice Outstanding Amount Base] =
+    SUM ( fact_invoice_ledger[OutstandingAmount] )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "00 vNext Base Measures\AP Invoice Ledger"
+    DESCRIPTION = "Business: outstanding invoice liability value. Technical: additive base over fact_invoice_ledger[OutstandingAmount]."
+
+MEASURE '_Measures'[vNext Invoice Paid Amount Base] =
+    SUM ( fact_invoice_ledger[PaidAmount] )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "00 vNext Base Measures\AP Invoice Ledger"
+    DESCRIPTION = "Business: paid invoice value. Technical: additive base over fact_invoice_ledger[PaidAmount]."
+
+MEASURE '_Measures'[vNext AP Validation Net Amount Base] =
+    SUM ( fact_ap_po_validation[NetAmount] )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "00 vNext Base Measures\AP Validation"
+    DESCRIPTION = "Business: AP/PO validation invoice net amount. Technical: additive base over fact_ap_po_validation[NetAmount]."
+
+------------------------------------------------------------
+-- 02 SELECTOR AND DATE HELPER MEASURES
+------------------------------------------------------------
+
+MEASURE '_Measures'[vNext Selected Statement Unit Multiplier] =
+    COALESCE ( SELECTEDVALUE ( 'Statement Unit'[Multiplier] ), 1 )
+    FORMAT_STRING = "0"
+    DISPLAY_FOLDER = "01 vNext Helpers\Selectors"
+    DESCRIPTION = "Business: selected report display-unit divisor. Technical: defaults to 1 when no unit is selected."
+
+MEASURE '_Measures'[vNext Selected Statement Unit Suffix] =
+    COALESCE ( SELECTEDVALUE ( 'Statement Unit'[Suffix] ), "" )
+    DISPLAY_FOLDER = "01 vNext Helpers\Selectors"
+    DESCRIPTION = "Business: selected report display-unit suffix. Technical: defaults to blank. Confirm column name if suffix metadata differs."
+
+MEASURE '_Measures'[vNext Selected Scenario] =
+    COALESCE ( SELECTEDVALUE ( dim_scenario[Scenario] ), "Actual" )
+    DISPLAY_FOLDER = "01 vNext Helpers\Selectors"
+    DESCRIPTION = "Business: selected scenario from the physical scenario dimension. Technical: defaults to Actual; align with cg_vNext_Scenario."
+
+MEASURE '_Measures'[vNext Selected Forecast Version] =
+    COALESCE ( SELECTEDVALUE ( dim_forecast_version[ForecastVersion] ), SELECTEDVALUE ( fact_gl_forecasts[ForecastVersion] ) )
+    DISPLAY_FOLDER = "01 vNext Helpers\Selectors"
+    DESCRIPTION = "Business: selected forecast version. Technical: uses forecast-version dimension first, then fact fallback. Confirm approved default/latest-version rule."
+
+MEASURE '_Measures'[vNext Selected Fiscal Year] =
+    SELECTEDVALUE ( dim_date[FiscalYearNumber] )
+    FORMAT_STRING = "0"
+    DISPLAY_FOLDER = "01 vNext Helpers\Fiscal Period"
+    DESCRIPTION = "Business: selected fiscal year. Technical: returns blank for multi-select; measures must handle blank explicitly."
+
+MEASURE '_Measures'[vNext Selected Fiscal Month] =
+    SELECTEDVALUE ( dim_date[FiscalMonthNumber] )
+    FORMAT_STRING = "0"
+    DISPLAY_FOLDER = "01 vNext Helpers\Fiscal Period"
+    DESCRIPTION = "Business: selected fiscal month/period number. Technical: returns blank for multi-select."
+
+MEASURE '_Measures'[vNext Selected Fiscal Period Key] =
+    SELECTEDVALUE ( dim_date[PeriodKey] )
+    FORMAT_STRING = "0"
+    DISPLAY_FOLDER = "01 vNext Helpers\Fiscal Period"
+    DESCRIPTION = "Business: selected fiscal period key. Technical: used by period-aware calc items and BS as-of measures."
+
+MEASURE '_Measures'[vNext Latest Actual Fiscal Period Key] =
+    CALCULATE (
+        MAX ( dim_date[PeriodKey] ),
+        REMOVEFILTERS ( dim_date ),
+        NOT ISBLANK ( [vNext Actual GBP Base] )
+    )
+    FORMAT_STRING = "0"
+    DISPLAY_FOLDER = "01 vNext Helpers\Fiscal Period"
+    DESCRIPTION = "Business: latest fiscal period with actuals. Technical: removes date filters and returns the max period key where actual GBP is non-blank. Validate against finance close calendar."
+
+MEASURE '_Measures'[vNext Selected Fiscal Period Key Capped] =
+    VAR _Selected = [vNext Selected Fiscal Period Key]
+    VAR _LatestActual = [vNext Latest Actual Fiscal Period Key]
+    RETURN
+        COALESCE ( MIN ( _Selected, _LatestActual ), _LatestActual )
+    FORMAT_STRING = "0"
+    DISPLAY_FOLDER = "01 vNext Helpers\Fiscal Period"
+    DESCRIPTION = "Business: selected fiscal period capped at latest closed actual period. Technical: prevents future actual-period leakage. Confirm close-period policy."
+
+MEASURE '_Measures'[vNext Prior Fiscal Period Key] =
+    VAR _PriorKey = SELECTEDVALUE ( dim_date[PriorPeriodKey] )
+    VAR _FiscalYear = [vNext Selected Fiscal Year]
+    VAR _FiscalMonth = [vNext Selected Fiscal Month]
+    VAR _FallbackPriorYearP12 =
+        CALCULATE (
+            MAX ( dim_date[PeriodKey] ),
+            REMOVEFILTERS ( dim_date ),
+            dim_date[FiscalYearNumber] = _FiscalYear - 1,
+            dim_date[FiscalMonthNumber] = 12
+        )
+    RETURN
+        IF ( _FiscalMonth = 1, _FallbackPriorYearP12, _PriorKey )
+    FORMAT_STRING = "0"
+    DISPLAY_FOLDER = "01 vNext Helpers\Fiscal Period"
+    DESCRIPTION = "Business: prior fiscal period key, including period-1 fallback to prior fiscal year period 12. Technical: supports MoM and prior-period calculations."
+
+------------------------------------------------------------
+-- 03 SCENARIO AND STATEMENT MEASURES
+------------------------------------------------------------
+
+MEASURE '_Measures'[vNext Actual GBP Display] =
+    DIVIDE ( [vNext Actual GBP Base], [vNext Selected Statement Unit Multiplier] )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "02 vNext Presentation\Amounts"
+    DESCRIPTION = "Business: actual GBP displayed in the selected statement unit. Technical: presentation wrapper over vNext Actual GBP Base."
+
+MEASURE '_Measures'[vNext Budget GBP Display] =
+    DIVIDE ( [vNext Budget GBP Base], [vNext Selected Statement Unit Multiplier] )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "02 vNext Presentation\Amounts"
+    DESCRIPTION = "Business: budget GBP displayed in the selected statement unit. Technical: presentation wrapper over vNext Budget GBP Base."
+
+MEASURE '_Measures'[vNext Forecast GBP Display] =
+    DIVIDE ( [vNext Forecast GBP Base], [vNext Selected Statement Unit Multiplier] )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "02 vNext Presentation\Amounts"
+    DESCRIPTION = "Business: forecast GBP displayed in the selected statement unit. Technical: presentation wrapper over vNext Forecast GBP Base."
+
+MEASURE '_Measures'[vNext Scenario Amount GBP Base] =
+    VAR _Scenario = [vNext Selected Scenario]
+    RETURN
+        SWITCH (
+            TRUE (),
+            _Scenario = "Actual", [vNext Actual GBP Base],
+            _Scenario = "Budget", [vNext Budget GBP Base],
+            _Scenario = "Forecast", [vNext Forecast GBP Base],
+            _Scenario = "Outturn", [vNext Forecast Outturn GBP Base],
+            [vNext Actual GBP Base]
+        )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "03 vNext Scenario Measures"
+    DESCRIPTION = "Business: scenario-aware GBP value. Technical: centralizes scenario switching to avoid repeated SWITCH logic across measures."
+
+MEASURE '_Measures'[vNext Scenario Amount GBP Display] =
+    DIVIDE ( [vNext Scenario Amount GBP Base], [vNext Selected Statement Unit Multiplier] )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "03 vNext Scenario Measures"
+    DESCRIPTION = "Business: selected scenario amount displayed in the selected unit. Technical: use as the preferred visual measure with scenario/time/variance calculation groups."
+
+MEASURE '_Measures'[vNext Forecast Remainder GBP Base] =
+    VAR _PeriodKey = [vNext Selected Fiscal Period Key Capped]
+    VAR _Year = QUOTIENT ( _PeriodKey, 100 )
+    VAR _Version = [vNext Selected Forecast Version]
+    RETURN
+        IF (
+            ISBLANK ( _PeriodKey ),
+            BLANK (),
+            CALCULATE (
+                [vNext Forecast GBP Base],
+                USERELATIONSHIP ( fact_gl_forecasts[DateKey], dim_date[DateKey] ),
+                REMOVEFILTERS ( dim_date ),
+                dim_date[FiscalYearNumber] = _Year,
+                dim_date[PeriodKey] > _PeriodKey,
+                fact_gl_forecasts[ForecastVersion] = _Version
+            )
+        )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "03 vNext Scenario Measures\Forecast"
+    DESCRIPTION = "Business: forecast value after the selected/latest actual period for outturn reporting. Technical: fiscal-year remainder using selected forecast version."
+
+MEASURE '_Measures'[vNext Forecast Outturn GBP Base] =
+    [vNext Actual GBP Base] + [vNext Forecast Remainder GBP Base]
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "03 vNext Scenario Measures\Forecast"
+    DESCRIPTION = "Business: full-year outturn as actuals to date plus forecast remainder. Technical: validate fiscal close and forecast-version behavior before replacing existing outturn measures."
+
+------------------------------------------------------------
+-- 04 BALANCE SHEET / TRIAL BALANCE SEMI-ADDITIVE MEASURES
+------------------------------------------------------------
+
+MEASURE '_Measures'[vNext BS Amount Base] =
+    [vNext Actual GBP Base]
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "04 vNext Balance Sheet"
+    DESCRIPTION = "Business: balance-sheet amount before as-of transformation. Technical: default uses actual GBP base; confirm whether budget/forecast BS scenarios should be supported."
+
+MEASURE '_Measures'[vNext BS Amount Display] =
+    DIVIDE ( [vNext BS Amount Base], [vNext Selected Statement Unit Multiplier] )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "04 vNext Balance Sheet"
+    DESCRIPTION = "Business: balance-sheet amount displayed in selected unit. Technical: presentation wrapper over vNext BS Amount Base."
+
+MEASURE '_Measures'[vNext BS Closing Balance As Of Base] =
+    VAR _Cap = [vNext Selected Fiscal Period Key Capped]
+    VAR _Year = QUOTIENT ( _Cap, 100 )
+    VAR _Period = MOD ( _Cap, 100 )
+    RETURN
+        IF (
+            ISBLANK ( _Cap ),
+            BLANK (),
+            CALCULATE (
+                [vNext BS Amount Base],
+                REMOVEFILTERS ( dim_date ),
+                fact_gl_balances[FiscalYear] = _Year,
+                fact_gl_balances[FiscalPeriod] >= 0,
+                fact_gl_balances[FiscalPeriod] <= _Period
+            )
+        )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "04 vNext Balance Sheet"
+    DESCRIPTION = "Business: closing balance as of selected/latest fiscal period. Technical: includes opening/brought-forward period 0 through selected period; semi-additive and not compatible with generic YTD calc item unless approved."
+
+MEASURE '_Measures'[vNext BS Prior Period Closing Base] =
+    VAR _PriorKey = [vNext Prior Fiscal Period Key]
+    VAR _Year = QUOTIENT ( _PriorKey, 100 )
+    VAR _Period = MOD ( _PriorKey, 100 )
+    RETURN
+        IF (
+            ISBLANK ( _PriorKey ),
+            BLANK (),
+            CALCULATE (
+                [vNext BS Amount Base],
+                REMOVEFILTERS ( dim_date ),
+                fact_gl_balances[FiscalYear] = _Year,
+                fact_gl_balances[FiscalPeriod] >= 0,
+                fact_gl_balances[FiscalPeriod] <= _Period
+            )
+        )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "04 vNext Balance Sheet"
+    DESCRIPTION = "Business: closing balance as of the prior fiscal period. Technical: uses prior-period helper including period-1 fallback."
+
+MEASURE '_Measures'[vNext BS Movement Base] =
+    [vNext BS Closing Balance As Of Base] - [vNext BS Prior Period Closing Base]
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "04 vNext Balance Sheet"
+    DESCRIPTION = "Business: balance-sheet movement from prior period to current period. Technical: subtracts prior as-of closing from current as-of closing."
+
+------------------------------------------------------------
+-- 05 VARIANCE AND KPI MEASURES
+------------------------------------------------------------
+
+MEASURE '_Measures'[vNext Budget Variance GBP Base] =
+    [vNext Actual GBP Base] - [vNext Budget GBP Base]
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "05 vNext Variance Measures"
+    DESCRIPTION = "Business: actual less budget variance in GBP. Technical: generic variance base; sign convention requires finance-owner confirmation by account type."
+
+MEASURE '_Measures'[vNext Budget Variance %] =
+    VAR _Budget = [vNext Budget GBP Base]
+    RETURN
+        IF ( ISBLANK ( _Budget ) || ABS ( _Budget ) < 0.005, BLANK (), DIVIDE ( [vNext Budget Variance GBP Base], _Budget ) )
+    FORMAT_STRING = "0.0%;-0.0%;0.0%"
+    DISPLAY_FOLDER = "05 vNext Variance Measures"
+    DESCRIPTION = "Business: actual-vs-budget variance percentage. Technical: denominator is raw budget with tolerance. Confirm whether ABS denominator is required for specific statement sections."
+
+MEASURE '_Measures'[vNext Forecast Variance GBP Base] =
+    [vNext Actual GBP Base] - [vNext Forecast GBP Base]
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "05 vNext Variance Measures"
+    DESCRIPTION = "Business: actual less forecast variance in GBP. Technical: generic variance base."
+
+MEASURE '_Measures'[vNext Forecast Variance %] =
+    VAR _Forecast = [vNext Forecast GBP Base]
+    RETURN
+        IF ( ISBLANK ( _Forecast ) || ABS ( _Forecast ) < 0.005, BLANK (), DIVIDE ( [vNext Forecast Variance GBP Base], _Forecast ) )
+    FORMAT_STRING = "0.0%;-0.0%;0.0%"
+    DISPLAY_FOLDER = "05 vNext Variance Measures"
+    DESCRIPTION = "Business: actual-vs-forecast variance percentage. Technical: denominator is raw forecast with tolerance."
+
+MEASURE '_Measures'[vNext Pay % Income] =
+    VAR _Income = CALCULATE ( [vNext Actual GBP Base], KEEPFILTERS ( dim_accounts[AccountType] = "Income" ) )
+    VAR _Pay = CALCULATE ( [vNext Actual GBP Base], KEEPFILTERS ( dim_accounts[AccountType] = "Pay" ) )
+    RETURN
+        DIVIDE ( _Pay, ABS ( _Income ) )
+    FORMAT_STRING = "0.0%;-0.0%;0.0%"
+    DISPLAY_FOLDER = "05 vNext KPI Measures"
+    DESCRIPTION = "Business: pay as a percentage of income. Technical: illustrative account-type filter pattern; validate account-type column values before deployment."
+
+------------------------------------------------------------
+-- 06 DATE ROLE MEASURES FOR INACTIVE RELATIONSHIPS
+------------------------------------------------------------
+
+MEASURE '_Measures'[vNext Invoice Original Amount by Due Date] =
+    CALCULATE (
+        [vNext Invoice Original Amount Base],
+        USERELATIONSHIP ( fact_invoice_ledger[DueDateKey], dim_date[DateKey] )
+    )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "06 vNext Date Role Measures\Invoice Ledger"
+    DESCRIPTION = "Business: invoice original value analysed by due date. Technical: activates inactive DueDateKey relationship."
+
+MEASURE '_Measures'[vNext Invoice Paid Amount by Paid Date] =
+    CALCULATE (
+        [vNext Invoice Paid Amount Base],
+        USERELATIONSHIP ( fact_invoice_ledger[PaidDateKey], dim_date[DateKey] )
+    )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "06 vNext Date Role Measures\Invoice Ledger"
+    DESCRIPTION = "Business: invoice paid value analysed by paid date. Technical: activates inactive PaidDateKey relationship."
+
+MEASURE '_Measures'[vNext Invoice Original Amount by Received Date] =
+    CALCULATE (
+        [vNext Invoice Original Amount Base],
+        USERELATIONSHIP ( fact_invoice_ledger[ReceivedDateKey], dim_date[DateKey] )
+    )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "06 vNext Date Role Measures\Invoice Ledger"
+    DESCRIPTION = "Business: invoice original value analysed by received date. Technical: activates inactive ReceivedDateKey relationship."
+
+MEASURE '_Measures'[vNext PO Net Amount by Created Date] =
+    CALCULATE (
+        [vNext PO Net Amount Base],
+        USERELATIONSHIP ( fact_purchase_orders[CreatedDateKey], dim_date[DateKey] )
+    )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "06 vNext Date Role Measures\Purchasing"
+    DESCRIPTION = "Business: PO net amount analysed by created date. Technical: activates inactive purchase-order CreatedDateKey relationship."
+
+MEASURE '_Measures'[vNext Purchase Line Net Value by Receipt Date] =
+    CALCULATE (
+        [vNext Purchase Line Net Value Base],
+        USERELATIONSHIP ( fact_purchase_lines[ReceiptDateKey], dim_date[DateKey] )
+    )
+    FORMAT_STRING = "#,0;(#,0);-"
+    DISPLAY_FOLDER = "06 vNext Date Role Measures\Purchasing"
+    DESCRIPTION = "Business: purchase-line net value analysed by receipt date. Technical: activates inactive purchase-line ReceiptDateKey relationship."
+
+------------------------------------------------------------
+-- 07 REPORT UX HELPER MEASURES
+------------------------------------------------------------
+
+MEASURE '_Measures'[vNext Selected FY Label] =
+    VAR _FY = [vNext Selected Fiscal Year]
+    RETURN IF ( ISBLANK ( _FY ), "Multiple fiscal years", "FY " & FORMAT ( _FY, "0" ) )
+    DISPLAY_FOLDER = "07 vNext Report UX"
+    DESCRIPTION = "Business: friendly selected fiscal-year label. Technical: report UX helper, not for numeric analysis."
+
+MEASURE '_Measures'[vNext Selected Period Label] =
+    VAR _FY = [vNext Selected Fiscal Year]
+    VAR _FM = [vNext Selected Fiscal Month]
+    RETURN
+        IF (
+            ISBLANK ( _FY ) || ISBLANK ( _FM ),
+            "Multiple periods",
+            "FY " & FORMAT ( _FY, "0" ) & " P" & FORMAT ( _FM, "00" )
+        )
+    DISPLAY_FOLDER = "07 vNext Report UX"
+    DESCRIPTION = "Business: friendly selected fiscal-period label. Technical: report UX helper, not for numeric analysis."
+
+MEASURE '_Measures'[vNext Current Filter Summary] =
+    [vNext Selected FY Label] & " | " & COALESCE ( SELECTEDVALUE ( dim_cost_centres[CostCentreName] ), "All cost centres" )
+    DISPLAY_FOLDER = "07 vNext Report UX"
+    DESCRIPTION = "Business: high-level filter summary for report headers. Technical: extend with additional dimensions as required."
+
+------------------------------------------------------------
+-- CALCULATION GROUP: cg_vNext_Scenario
+-- Create as a new calculation group table with column [Scenario Calc]
+-- Precedence: 10
+------------------------------------------------------------
+
+CALCULATIONGROUP 'cg_vNext_Scenario'[Scenario Calc]
+    PRECEDENCE = 10
+    DESCRIPTION = "Business: reusable scenario selector for Actual, Budget, Forecast and Outturn. Technical: designed to replace repeated SWITCH scenario logic once regression tested."
+
+    CALCULATIONITEM "Actual" =
+        CALCULATE ( SELECTEDMEASURE (), dim_scenario[Scenario] = "Actual" )
+        FORMAT_STRING = SELECTEDMEASUREFORMATSTRING ()
+        DESCRIPTION = "Returns the selected measure in Actual scenario context. Use with measures that respond to dim_scenario or scenario-aware base logic."
+
+    CALCULATIONITEM "Budget" =
+        CALCULATE ( SELECTEDMEASURE (), dim_scenario[Scenario] = "Budget" )
+        FORMAT_STRING = SELECTEDMEASUREFORMATSTRING ()
+        DESCRIPTION = "Returns the selected measure in Budget scenario context. Validate with measures sourced from fact_gl_balances[BudgetGBP]."
+
+    CALCULATIONITEM "Forecast" =
+        CALCULATE ( SELECTEDMEASURE (), dim_scenario[Scenario] = "Forecast" )
+        FORMAT_STRING = SELECTEDMEASUREFORMATSTRING ()
+        DESCRIPTION = "Returns the selected measure in Forecast scenario context. Validate forecast-version filter behavior."
+
+    CALCULATIONITEM "Outturn" =
+        CALCULATE ( SELECTEDMEASURE (), dim_scenario[Scenario] = "Outturn" )
+        FORMAT_STRING = SELECTEDMEASUREFORMATSTRING ()
+        DESCRIPTION = "Returns the selected measure in Outturn scenario context. Use with outturn-aware measures or explicit vNext Forecast Outturn measures."
+
+------------------------------------------------------------
+-- CALCULATION GROUP: cg_vNext_Variance
+-- Create as a new calculation group table with column [Variance Calc]
+-- Precedence: 15
+------------------------------------------------------------
+
+CALCULATIONGROUP 'cg_vNext_Variance'[Variance Calc]
+    PRECEDENCE = 15
+    DESCRIPTION = "Business: reusable actual/plan/forecast/outturn variance selector. Technical: applies after scenario selection; validate interaction with cg_vNext_Scenario before replacing existing cg_Variance."
+
+    CALCULATIONITEM "Value" =
+        SELECTEDMEASURE ()
+        FORMAT_STRING = SELECTEDMEASUREFORMATSTRING ()
+        DESCRIPTION = "Pass-through selected measure."
+
+    CALCULATIONITEM "Variance to Plan" =
+        VAR _Actual = CALCULATE ( SELECTEDMEASURE (), 'cg_vNext_Scenario'[Scenario Calc] = "Actual" )
+        VAR _Plan = CALCULATE ( SELECTEDMEASURE (), 'cg_vNext_Scenario'[Scenario Calc] = "Budget" )
+        RETURN _Actual - _Plan
+        FORMAT_STRING = SELECTEDMEASUREFORMATSTRING ()
+        DESCRIPTION = "Actual less Budget. Confirm favorable/unfavorable sign convention by account type."
+
+    CALCULATIONITEM "Variance to Plan %" =
+        VAR _Actual = CALCULATE ( SELECTEDMEASURE (), 'cg_vNext_Scenario'[Scenario Calc] = "Actual" )
+        VAR _Plan = CALCULATE ( SELECTEDMEASURE (), 'cg_vNext_Scenario'[Scenario Calc] = "Budget" )
+        RETURN IF ( ISBLANK ( _Plan ) || ABS ( _Plan ) < 0.005, BLANK (), DIVIDE ( _Actual - _Plan, _Plan ) )
+        FORMAT_STRING = "0.0%;-0.0%;0.0%"
+        DESCRIPTION = "Actual less Budget divided by Budget with currency tolerance. Confirm denominator convention."
+
+    CALCULATIONITEM "Variance to Forecast" =
+        VAR _Actual = CALCULATE ( SELECTEDMEASURE (), 'cg_vNext_Scenario'[Scenario Calc] = "Actual" )
+        VAR _Forecast = CALCULATE ( SELECTEDMEASURE (), 'cg_vNext_Scenario'[Scenario Calc] = "Forecast" )
+        RETURN _Actual - _Forecast
+        FORMAT_STRING = SELECTEDMEASUREFORMATSTRING ()
+        DESCRIPTION = "Actual less Forecast."
+
+    CALCULATIONITEM "Variance to Forecast %" =
+        VAR _Actual = CALCULATE ( SELECTEDMEASURE (), 'cg_vNext_Scenario'[Scenario Calc] = "Actual" )
+        VAR _Forecast = CALCULATE ( SELECTEDMEASURE (), 'cg_vNext_Scenario'[Scenario Calc] = "Forecast" )
+        RETURN IF ( ISBLANK ( _Forecast ) || ABS ( _Forecast ) < 0.005, BLANK (), DIVIDE ( _Actual - _Forecast, _Forecast ) )
+        FORMAT_STRING = "0.0%;-0.0%;0.0%"
+        DESCRIPTION = "Actual less Forecast divided by Forecast with currency tolerance."
+
+    CALCULATIONITEM "Variance Outturn to Plan" =
+        VAR _Outturn = CALCULATE ( SELECTEDMEASURE (), 'cg_vNext_Scenario'[Scenario Calc] = "Outturn" )
+        VAR _Plan = CALCULATE ( SELECTEDMEASURE (), 'cg_vNext_Scenario'[Scenario Calc] = "Budget" )
+        RETURN _Outturn - _Plan
+        FORMAT_STRING = SELECTEDMEASUREFORMATSTRING ()
+        DESCRIPTION = "Outturn less Budget."
+
+    CALCULATIONITEM "Variance Outturn to Plan %" =
+        VAR _Outturn = CALCULATE ( SELECTEDMEASURE (), 'cg_vNext_Scenario'[Scenario Calc] = "Outturn" )
+        VAR _Plan = CALCULATE ( SELECTEDMEASURE (), 'cg_vNext_Scenario'[Scenario Calc] = "Budget" )
+        RETURN IF ( ISBLANK ( _Plan ) || ABS ( _Plan ) < 0.005, BLANK (), DIVIDE ( _Outturn - _Plan, _Plan ) )
+        FORMAT_STRING = "0.0%;-0.0%;0.0%"
+        DESCRIPTION = "Outturn less Budget divided by Budget with currency tolerance."
+
+------------------------------------------------------------
+-- CALCULATION GROUP: cg_vNext_Time_Intelligence
+-- Create as a new calculation group table with column [Time Calc]
+-- Precedence: 30
+------------------------------------------------------------
+
+CALCULATIONGROUP 'cg_vNext_Time_Intelligence'[Time Calc]
+    PRECEDENCE = 30
+    DESCRIPTION = "Business: fiscal-period time calculations. Technical: custom fiscal logic using dim_date fiscal columns and PeriodKey; valid for additive measures. Use cg_vNext_BS_Reporting for semi-additive balance-sheet measures."
+
+    CALCULATIONITEM "Current Period" =
+        VAR _FiscalYear = SELECTEDVALUE ( dim_date[FiscalYearNumber] )
+        VAR _FiscalMonth = SELECTEDVALUE ( dim_date[FiscalMonthNumber] )
+        RETURN
+            IF (
+                ISBLANK ( _FiscalYear ) || ISBLANK ( _FiscalMonth ),
+                BLANK (),
+                CALCULATE (
+                    SELECTEDMEASURE (),
+                    REMOVEFILTERS ( dim_date ),
+                    dim_date[FiscalYearNumber] = _FiscalYear,
+                    dim_date[FiscalMonthNumber] = _FiscalMonth
+                )
+            )
+        FORMAT_STRING = SELECTEDMEASUREFORMATSTRING ()
+        DESCRIPTION = "Current selected fiscal period. Requires a single fiscal year and fiscal month in context."
+
+    CALCULATIONITEM "YTD" =
+        VAR _FiscalYear = SELECTEDVALUE ( dim_date[FiscalYearNumber] )
+        VAR _FiscalMonth = SELECTEDVALUE ( dim_date[FiscalMonthNumber] )
+        RETURN
+            IF (
+                ISBLANK ( _FiscalYear ) || ISBLANK ( _FiscalMonth ),
+                BLANK (),
+                CALCULATE (
+                    SELECTEDMEASURE (),
+                    REMOVEFILTERS ( dim_date ),
+                    dim_date[FiscalYearNumber] = _FiscalYear,
+                    dim_date[FiscalMonthNumber] <= _FiscalMonth
+                )
+            )
+        FORMAT_STRING = SELECTEDMEASUREFORMATSTRING ()
+        DESCRIPTION = "Fiscal year-to-date through selected fiscal month. Valid for additive measures."
+
+    CALCULATIONITEM "Full Year" =
+        VAR _FiscalYear = SELECTEDVALUE ( dim_date[FiscalYearNumber] )
+        RETURN
+            IF (
+                ISBLANK ( _FiscalYear ),
+                BLANK (),
+                CALCULATE ( SELECTEDMEASURE (), REMOVEFILTERS ( dim_date ), dim_date[FiscalYearNumber] = _FiscalYear )
+            )
+        FORMAT_STRING = SELECTEDMEASUREFORMATSTRING ()
+        DESCRIPTION = "Full fiscal year for selected fiscal year."
+
+    CALCULATIONITEM "Prior Period" =
+        VAR _FiscalYear = SELECTEDVALUE ( dim_date[FiscalYearNumber] )
+        VAR _FiscalMonth = SELECTEDVALUE ( dim_date[FiscalMonthNumber] )
+        VAR _PriorKey = SELECTEDVALUE ( dim_date[PriorPeriodKey] )
+        VAR _FallbackPriorYearP12 =
+            CALCULATE (
+                MAX ( dim_date[PeriodKey] ),
+                REMOVEFILTERS ( dim_date ),
+                dim_date[FiscalYearNumber] = _FiscalYear - 1,
+                dim_date[FiscalMonthNumber] = 12
+            )
+        VAR _EffectivePriorKey = IF ( _FiscalMonth = 1, _FallbackPriorYearP12, _PriorKey )
+        RETURN
+            IF (
+                ISBLANK ( _EffectivePriorKey ),
+                BLANK (),
+                CALCULATE ( SELECTEDMEASURE (), REMOVEFILTERS ( dim_date ), TREATAS ( { _EffectivePriorKey }, dim_date[PeriodKey] ) )
+            )
+        FORMAT_STRING = SELECTEDMEASUREFORMATSTRING ()
+        DESCRIPTION = "Prior fiscal period, with period-1 fallback to prior fiscal year period 12."
+
+    CALCULATIONITEM "MoM" =
+        VAR _Current = CALCULATE ( SELECTEDMEASURE (), 'cg_vNext_Time_Intelligence'[Time Calc] = "Current Period" )
+        VAR _Prior = CALCULATE ( SELECTEDMEASURE (), 'cg_vNext_Time_Intelligence'[Time Calc] = "Prior Period" )
+        RETURN IF ( ISBLANK ( _Current ) || ISBLANK ( _Prior ), BLANK (), _Current - _Prior )
+        FORMAT_STRING = SELECTEDMEASUREFORMATSTRING ()
+        DESCRIPTION = "Current period less prior period."
+
+    CALCULATIONITEM "MoM %" =
+        VAR _Current = CALCULATE ( SELECTEDMEASURE (), 'cg_vNext_Time_Intelligence'[Time Calc] = "Current Period" )
+        VAR _Prior = CALCULATE ( SELECTEDMEASURE (), 'cg_vNext_Time_Intelligence'[Time Calc] = "Prior Period" )
+        RETURN IF ( ISBLANK ( _Prior ) || ABS ( _Prior ) < 0.005, BLANK (), DIVIDE ( _Current - _Prior, ABS ( _Prior ) ) )
+        FORMAT_STRING = "0.0%;-0.0%;0.0%"
+        DESCRIPTION = "Month-on-month percentage movement using absolute prior period denominator. Confirm business convention."
+
+    CALCULATIONITEM "Prior Year" =
+        VAR _FiscalYear = SELECTEDVALUE ( dim_date[FiscalYearNumber] )
+        RETURN
+            IF (
+                ISBLANK ( _FiscalYear ),
+                BLANK (),
+                CALCULATE ( SELECTEDMEASURE (), REMOVEFILTERS ( dim_date ), dim_date[FiscalYearNumber] = _FiscalYear - 1 )
+            )
+        FORMAT_STRING = SELECTEDMEASUREFORMATSTRING ()
+        DESCRIPTION = "Full prior fiscal year."
+
+    CALCULATIONITEM "Prior Year Period" =
+        VAR _PriorYearKey = SELECTEDVALUE ( dim_date[PriorYearPeriodKey] )
+        RETURN
+            IF (
+                ISBLANK ( _PriorYearKey ),
+                BLANK (),
+                CALCULATE ( SELECTEDMEASURE (), REMOVEFILTERS ( dim_date ), TREATAS ( { _PriorYearKey }, dim_date[PeriodKey] ) )
+            )
+        FORMAT_STRING = SELECTEDMEASUREFORMATSTRING ()
+        DESCRIPTION = "Equivalent fiscal period in prior fiscal year."
+
+    CALCULATIONITEM "Prior Year YTD" =
+        VAR _FiscalYear = SELECTEDVALUE ( dim_date[FiscalYearNumber] )
+        VAR _FiscalMonth = SELECTEDVALUE ( dim_date[FiscalMonthNumber] )
+        RETURN
+            IF (
+                ISBLANK ( _FiscalYear ) || ISBLANK ( _FiscalMonth ),
+                BLANK (),
+                CALCULATE (
+                    SELECTEDMEASURE (),
+                    REMOVEFILTERS ( dim_date ),
+                    dim_date[FiscalYearNumber] = _FiscalYear - 1,
+                    dim_date[FiscalMonthNumber] <= _FiscalMonth
+                )
+            )
+        FORMAT_STRING = SELECTEDMEASUREFORMATSTRING ()
+        DESCRIPTION = "Prior fiscal year-to-date through equivalent fiscal month."
+
+    CALCULATIONITEM "YoY" =
+        VAR _Current = CALCULATE ( SELECTEDMEASURE (), 'cg_vNext_Time_Intelligence'[Time Calc] = "Current Period" )
+        VAR _PriorYear = CALCULATE ( SELECTEDMEASURE (), 'cg_vNext_Time_Intelligence'[Time Calc] = "Prior Year Period" )
+        RETURN IF ( ISBLANK ( _Current ) || ISBLANK ( _PriorYear ), BLANK (), _Current - _PriorYear )
+        FORMAT_STRING = SELECTEDMEASUREFORMATSTRING ()
+        DESCRIPTION = "Current period less equivalent prior-year period."
+
+    CALCULATIONITEM "YoY %" =
+        VAR _Current = CALCULATE ( SELECTEDMEASURE (), 'cg_vNext_Time_Intelligence'[Time Calc] = "Current Period" )
+        VAR _PriorYear = CALCULATE ( SELECTEDMEASURE (), 'cg_vNext_Time_Intelligence'[Time Calc] = "Prior Year Period" )
+        RETURN IF ( ISBLANK ( _PriorYear ) || ABS ( _PriorYear ) < 0.005, BLANK (), DIVIDE ( _Current - _PriorYear, ABS ( _PriorYear ) ) )
+        FORMAT_STRING = "0.0%;-0.0%;0.0%"
+        DESCRIPTION = "Year-on-year percentage movement using absolute prior-year denominator. Confirm business convention."
+
+    CALCULATIONITEM "YoY YTD" =
+        VAR _CurrentYTD = CALCULATE ( SELECTEDMEASURE (), 'cg_vNext_Time_Intelligence'[Time Calc] = "YTD" )
+        VAR _PriorYTD = CALCULATE ( SELECTEDMEASURE (), 'cg_vNext_Time_Intelligence'[Time Calc] = "Prior Year YTD" )
+        RETURN IF ( ISBLANK ( _CurrentYTD ) || ISBLANK ( _PriorYTD ), BLANK (), _CurrentYTD - _PriorYTD )
+        FORMAT_STRING = SELECTEDMEASUREFORMATSTRING ()
+        DESCRIPTION = "Current fiscal YTD less prior fiscal YTD."
+
+    CALCULATIONITEM "YoY YTD %" =
+        VAR _CurrentYTD = CALCULATE ( SELECTEDMEASURE (), 'cg_vNext_Time_Intelligence'[Time Calc] = "YTD" )
+        VAR _PriorYTD = CALCULATE ( SELECTEDMEASURE (), 'cg_vNext_Time_Intelligence'[Time Calc] = "Prior Year YTD" )
+        RETURN IF ( ISBLANK ( _PriorYTD ) || ABS ( _PriorYTD ) < 0.005, BLANK (), DIVIDE ( _CurrentYTD - _PriorYTD, ABS ( _PriorYTD ) ) )
+        FORMAT_STRING = "0.0%;-0.0%;0.0%"
+        DESCRIPTION = "YTD year-on-year percentage movement using absolute prior-year YTD denominator. Confirm business convention."
+
+------------------------------------------------------------
+-- CALCULATION GROUP: cg_vNext_BS_Reporting
+-- Create as a new calculation group table with column [BS Reporting Calc]
+-- Precedence: 25
+------------------------------------------------------------
+
+CALCULATIONGROUP 'cg_vNext_BS_Reporting'[BS Reporting Calc]
+    PRECEDENCE = 25
+    DESCRIPTION = "Business: semi-additive balance-sheet reporting selector. Technical: keep separate from generic time intelligence because BS closing balances are not additive across periods."
+
+    CALCULATIONITEM "Current Value" =
+        SELECTEDMEASURE ()
+        FORMAT_STRING = SELECTEDMEASUREFORMATSTRING ()
+        DESCRIPTION = "Pass-through selected measure."
+
+    CALCULATIONITEM "As Of Current Period" =
+        [vNext BS Closing Balance As Of Base]
+        FORMAT_STRING = SELECTEDMEASUREFORMATSTRING ()
+        DESCRIPTION = "Balance-sheet closing balance as of selected/latest fiscal period."
+
+    CALCULATIONITEM "As Of Prior Period" =
+        [vNext BS Prior Period Closing Base]
+        FORMAT_STRING = SELECTEDMEASUREFORMATSTRING ()
+        DESCRIPTION = "Balance-sheet closing balance as of prior fiscal period."
+
+    CALCULATIONITEM "BS Movement" =
+        [vNext BS Movement Base]
+        FORMAT_STRING = SELECTEDMEASUREFORMATSTRING ()
+        DESCRIPTION = "Movement between prior-period closing balance and current closing balance."
+
+------------------------------------------------------------
+-- CALCULATION GROUP: cg_vNext_Display_Unit
+-- Optional replacement for repeated scaled/display measures
+-- Precedence: 50
+------------------------------------------------------------
+
+CALCULATIONGROUP 'cg_vNext_Display_Unit'[Display Unit Calc]
+    PRECEDENCE = 50
+    DESCRIPTION = "Business: optional display-unit scaling. Technical: use to reduce duplicated scaled/display measures after regression testing."
+
+    CALCULATIONITEM "Base Units" =
+        SELECTEDMEASURE ()
+        FORMAT_STRING = SELECTEDMEASUREFORMATSTRING ()
+        DESCRIPTION = "No scaling."
+
+    CALCULATIONITEM "Selected Statement Unit" =
+        DIVIDE ( SELECTEDMEASURE (), [vNext Selected Statement Unit Multiplier] )
+        FORMAT_STRING = SELECTEDMEASUREFORMATSTRING ()
+        DESCRIPTION = "Scales selected measure by Statement Unit multiplier. Do not apply to ratios or percentages."
