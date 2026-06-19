@@ -168,3 +168,17 @@ Because this implementation adds vNext objects rather than editing existing obje
 - Deprecated measures are hidden and documented with replacement mappings.
 - RLS behavior is validated for representative restricted users.
 - Performance is checked with DAX Studio Server Timings and VertiPaq Analyzer before production release.
+
+## Format-string precedence and unit scaling
+
+Custom format strings should **not** globally supersede dynamic formatting when the business requirement is to apply selectable units such as base units, thousands, or millions.
+
+Recommended rule:
+
+1. **Base measures keep static custom formats** as safe defaults, for example currency, count, ratio, or percentage formatting.
+2. **Calculation groups own unit-aware dynamic formatting** when they change the numeric scale of a selected measure.
+3. **Dynamic format strings should supersede selected-measure custom formats only for the calculation item that changes units**, such as `Selected Statement Unit`, `Thousands`, or `Millions`.
+4. **Percentage, ratio, text, and already-scaled display measures should preserve their own formats** and should not use the display-unit calculation group.
+5. **The display-unit calculation group should have higher precedence than semantic calculation groups** so the final numeric result is scaled and formatted last.
+
+In the supplied vNext script, `cg_vNext_Display_Unit` implements this pattern. `Base Units` and `Preserve Format / No Unit Override` keep `SELECTEDMEASUREFORMATSTRING()`, while `Selected Statement Unit`, `Thousands`, and `Millions` intentionally apply dynamic unit-specific format strings.

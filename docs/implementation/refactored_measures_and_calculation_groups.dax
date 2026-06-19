@@ -752,20 +752,52 @@ CALCULATIONGROUP 'cg_vNext_BS_Reporting'[BS Reporting Calc]
 
 ------------------------------------------------------------
 -- CALCULATION GROUP: cg_vNext_Display_Unit
--- Optional replacement for repeated scaled/display measures
+-- Preferred replacement for repeated scaled/display measures
 -- Precedence: 50
+--
+-- Formatting rule
+-- - Base measures keep static custom format strings as safe fallbacks.
+-- - This calculation group should own unit-specific dynamic formatting.
+-- - The calculation-item FORMAT_STRING expression supersedes the selected
+--   measure format string only when the item intentionally changes units.
+-- - Percentages, ratios, text measures and pre-scaled display measures should
+--   not use this calculation group.
 ------------------------------------------------------------
 
 CALCULATIONGROUP 'cg_vNext_Display_Unit'[Display Unit Calc]
     PRECEDENCE = 50
-    DESCRIPTION = "Business: optional display-unit scaling. Technical: use to reduce duplicated scaled/display measures after regression testing."
+    DESCRIPTION = "Business: central unit-scaling and dynamic-format selector. Technical: dynamic format strings here intentionally supersede base custom formats when applying units such as thousands or millions; base measure formats remain fallbacks for unscaled values."
 
     CALCULATIONITEM "Base Units" =
         SELECTEDMEASURE ()
         FORMAT_STRING = SELECTEDMEASUREFORMATSTRING ()
-        DESCRIPTION = "No scaling."
+        DESCRIPTION = "No scaling. Preserves the selected measure format string exactly."
 
     CALCULATIONITEM "Selected Statement Unit" =
-        DIVIDE ( SELECTEDMEASURE (), [vNext Selected Statement Unit Multiplier] )
+        VAR _Multiplier = [vNext Selected Statement Unit Multiplier]
+        RETURN
+            DIVIDE ( SELECTEDMEASURE (), _Multiplier )
+        FORMAT_STRING =
+            VAR _FormatFromSelector = SELECTEDVALUE ( 'Statement Unit'[Format] )
+            VAR _Suffix = [vNext Selected Statement Unit Suffix]
+            RETURN
+                COALESCE (
+                    _FormatFromSelector,
+                    "#,0" & IF ( _Suffix <> "", " " & _Suffix, "" ) & ";(#,0" & IF ( _Suffix <> "", " " & _Suffix, "" ) & ");-"
+                )
+        DESCRIPTION = "Scales selected measure by the Statement Unit multiplier and applies the unit-specific dynamic format. This intentionally supersedes the selected measure format string for unit-aware currency/amount measures."
+
+    CALCULATIONITEM "Thousands" =
+        DIVIDE ( SELECTEDMEASURE (), 1000 )
+        FORMAT_STRING = "#,0 K;(#,0 K);-"
+        DESCRIPTION = "Scales numeric currency/amount measures to thousands. Dynamic format intentionally supersedes the base custom format."
+
+    CALCULATIONITEM "Millions" =
+        DIVIDE ( SELECTEDMEASURE (), 1000000 )
+        FORMAT_STRING = "#,0.0 M;(#,0.0 M);-"
+        DESCRIPTION = "Scales numeric currency/amount measures to millions. Dynamic format intentionally supersedes the base custom format."
+
+    CALCULATIONITEM "Preserve Format / No Unit Override" =
+        SELECTEDMEASURE ()
         FORMAT_STRING = SELECTEDMEASUREFORMATSTRING ()
-        DESCRIPTION = "Scales selected measure by Statement Unit multiplier. Do not apply to ratios or percentages."
+        DESCRIPTION = "Compatibility item for measures where custom formatting must remain authoritative, for example ratios, percentages, text helpers, and already-scaled display measures."
