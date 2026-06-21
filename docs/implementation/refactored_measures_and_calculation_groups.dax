@@ -192,6 +192,16 @@ MEASURE '_Measures'[vNext Selected Fiscal Period Key] =
     DESCRIPTION = "Business: selected fiscal period key. Technical: used by period-aware calc items and BS as-of measures."
 
 MEASURE '_Measures'[vNext Latest Actual Fiscal Period Key] =
+    MAXX (
+        FILTER (
+            ALL ( dim_date ),
+            NOT ISBLANK ( CALCULATE ( [vNext Actual GBP Base] ) )
+        ),
+        dim_date[PeriodKey]
+    )
+    FORMAT_STRING = "0"
+    DISPLAY_FOLDER = "01 vNext Helpers\Fiscal Period"
+    DESCRIPTION = "Business: latest fiscal period with actuals. Technical: iterates all date rows and evaluates the actual base measure inside FILTER via CALCULATE; avoids using a measure directly as a CALCULATE Boolean filter. Validate against finance close calendar."
     CALCULATE (
         MAX ( dim_date[PeriodKey] ),
         REMOVEFILTERS ( dim_date ),

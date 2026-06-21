@@ -182,3 +182,31 @@ Recommended rule:
 5. **The display-unit calculation group should have higher precedence than semantic calculation groups** so the final numeric result is scaled and formatted last.
 
 In the supplied vNext script, `cg_vNext_Display_Unit` implements this pattern. `Base Units` and `Preserve Format / No Unit Override` keep `SELECTEDMEASUREFORMATSTRING()`, while `Selected Statement Unit`, `Thousands`, and `Millions` intentionally apply dynamic unit-specific format strings.
+
+## Troubleshooting: PLACEHOLDER error in CALCULATE Boolean filters
+
+If Power BI shows an error such as `A function 'PLACEHOLDER' has been used in a True/False expression that is used as a table filter expression`, check whether a measure has been used directly in a `CALCULATE` Boolean filter argument.
+
+Invalid pattern:
+
+```DAX
+CALCULATE (
+    MAX ( dim_date[PeriodKey] ),
+    REMOVEFILTERS ( dim_date ),
+    NOT ISBLANK ( [vNext Actual GBP Base] )
+)
+```
+
+Correct pattern:
+
+```DAX
+MAXX (
+    FILTER (
+        ALL ( dim_date ),
+        NOT ISBLANK ( CALCULATE ( [vNext Actual GBP Base] ) )
+    ),
+    dim_date[PeriodKey]
+)
+```
+
+The corrected pattern uses `FILTER` to create a table expression and uses `CALCULATE` inside the row context to evaluate the measure for each date row. This is the pattern now used by `[vNext Latest Actual Fiscal Period Key]`.

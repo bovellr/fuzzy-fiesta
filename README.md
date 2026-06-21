@@ -13,3 +13,4 @@ To download the Markdown file from GitHub, open `POWERBI_SEMANTIC_MODEL_REVIEW.m
 
 - [`docs/implementation/refactored_measures_and_calculation_groups.dax`](docs/implementation/refactored_measures_and_calculation_groups.dax) — proposed vNext DAX measures and calculation groups.
 - [`docs/implementation/powerbi_dax_refactor_implementation_guide.md`](docs/implementation/powerbi_dax_refactor_implementation_guide.md) — implementation order, validation plan, regression matrix, rollback plan, and definition of done.
+- [`docs/enterprise_model_governance_and_change_control.md`](docs/enterprise_model_governance_and_change_control.md) — enterprise governance, ownership, change-control workflow, release checklist, and operational controls.
